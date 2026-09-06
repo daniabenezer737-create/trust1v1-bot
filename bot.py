@@ -21,7 +21,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# --- SQLite Database Setup (ባላንስ ፈጽሞ እንዳይጠፋ) ---
+# --- SQLite Database Setup ---
 def init_db():
     conn = sqlite3.connect('bot_database.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -76,8 +76,8 @@ private_rooms = {}
 active_matches = {}
 
 JOIN_ROOM_STATE = 1
-RECHARGE_PHOTO = 2  # ስክሪንሻት መቀበያ ስቴት
-WITHDRAW_AMOUNT, WITHDRAW_PHONE = 3, 4
+RECHARGE_NAME, RECHARGE_PHOTO = 2, 3
+WITHDRAW_AMOUNT, WITHDRAW_PHONE = 4, 5
 
 def generate_room_code():
     return ''.join(random.choices(string.digits, k=5))
@@ -172,7 +172,7 @@ async def handle_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bal = get_user_balance(user_id)
     await update.message.reply_text(f"💳 **የእርስዎ ባላንስ፦** {bal} ብር", parse_mode="Markdown")
 
-# Recharge Handler (Screenshot based)
+# --- Recharge Process (ስም እና ፎቶ መቀበያ) ---
 async def handle_recharge_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📥 **ብር ገቢ ማድረጊያ (Recharge)**\n\n"
@@ -180,18 +180,25 @@ async def handle_recharge_start(update: Update, context: ContextTypes.DEFAULT_TY
         f"📲 **Telebirr Details:**\n"
         f"• ስልክ፦ `{TELEBIRR_PHONE}`\n"
         f"• ስም፦ **{TELEBIRR_NAME}**\n\n"
-        f"እባክዎን ብር ከላኩ በኋላ የከፈሉበትን **ስክሪንሻት (Screenshot ፎቶ)** እዚህ ይላኩ፦"
+        f"እባክዎን ብር ያስተላለፉበትን **የቴሌብር ስምዎን (Sender Name)** እዚህ ይጻፉ፦"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
+    return RECHARGE_NAME
+
+async def handle_recharge_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.message.text.strip()
+    context.user_data['recharge_name'] = name
+    await update.message.reply_text("✅ ስምዎ ተመዝግቧል። አሁን ደግሞ የክፍያውን **ስክሪንሻት (Screenshot ፎቶ)** ይላኩ፦")
     return RECHARGE_PHOTO
 
-async def handle_recharge_photo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_recharge_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
-        await update.message.reply_text("❌ እባክዎን የቴሌብር ክፍያ የፈጸሙበትን **ስክሪንሻት (Screenshot ፎቶ)** ብቻ ይላኩ!")
+        await update.message.reply_text("❌ እባክዎን የክፍያውን **ስክሪንሻት (ፎቶ)** ብቻ ይላኩ!")
         return RECHARGE_PHOTO
 
     photo = update.message.photo[-1].file_id
     user_id = update.effective_user.id
+    sender_name = context.user_data.get('recharge_name', 'አልታወቀም')
 
     keyboard = [
         [
@@ -208,16 +215,17 @@ async def handle_recharge_photo_input(update: Update, context: ContextTypes.DEFA
         chat_id=ADMIN_ID,
         photo=photo,
         caption=f"🔔 **አዲስ የ Recharge (የገቢ) ጥያቄ!**\n\n"
-                f"• User ID: `{user_id}`\n\n"
-                f"እባክዎን ስክሪንሻቱን አረጋግጠው የሚፈለገውን የብር መጠን ይምረጡ፦",
+                f"• User ID: `{user_id}`\n"
+                f"• የላከው ስም: **{sender_name}**\n\n"
+                f"እባክዎን ስክሪንሻቱን እና ስሙን አረጋግጠው የሚፈለገውን የብር መጠን ይምረጡ፦",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-    await update.message.reply_text("✅ የገቢ ማረጋገጫ ፎቶዎ ለ Admin ተልኳል። ሲረጋገጥ ባላንስዎ ላይ ይጨመራል!")
+    await update.message.reply_text("✅ የገቢ ማረጋገጫ ስምዎ እና ፎቶዎ ለ Admin ተልኳል። ሲረጋገጥ ባላንስዎ ላይ ይጨመራል!")
     return ConversationHandler.END
 
-# Withdraw Handler
+# --- Withdraw Handler ---
 async def handle_withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal = get_user_balance(user_id)
@@ -273,7 +281,7 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ የ {amount} ብር ማውጣት ጥያቄዎ ለ Admin ተልኳል። በቅርቡ ገቢ ይደረጋል!")
     return ConversationHandler.END
 
-# Admin Callbacks
+# --- Admin Callbacks ---
 async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -289,7 +297,7 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("rej_rec_"):
         user_id = int(data.split("_")[2])
         await query.edit_message_text(f"❌ ለ User `{user_id}` የገቢ ጥያቄ ተሰርዟል።", parse_mode="Markdown")
-        await context.bot.send_message(user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን የላኩትን ስክሪንሻት አረጋግጠው እንደገና ይሞክሩ።")
+        await context.bot.send_message(user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን የላኩትን ስም እና ስክሪንሻት አረጋግጠው እንደገና ይሞክሩ።")
 
     elif data.startswith("app_wd_"):
         _, _, user_id, amount = data.split("_")
@@ -304,7 +312,7 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(f"❌ ለ User `{user_id}` የ {amount} ብር ወጪ ጥያቄ ተሰርዟል፤ ብሩ ተመልሷል።", parse_mode="Markdown")
         await context.bot.send_message(user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል። አዲሱ ባላንስዎ: {new_bal} ብር")
 
-# Game Selection
+# --- Game Selection & Matches ---
 async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal = get_user_balance(user_id)
@@ -395,7 +403,7 @@ async def handle_claim_callback(update: Update, context: ContextTypes.DEFAULT_TY
         prize = amount * 2
 
         if c1 == "win" and c2 == "win":
-            msg = "⚠️ ሁለታችሁም 'አሸንፌአለሁ' ብላችኋል! እባክዎን የጨዋታውን የማጠናቀቂያ Screenshot በዚህ ቦት ላይ ይላኩ።"
+            msg = "⚠️ ሁለታችሁም 'አሸንፌአለሁ' ብላችኋል! እባክዎን ሁለታችሁም የየራሳችሁን የጨዋታ ማጠናቀቂያ Screenshot (ፎቶ) አሁን በዚህ ቦት ላይ ላኩ።"
             await context.bot.send_message(p1, msg)
             await context.bot.send_message(p2, msg)
         elif c1 == "win" and c2 == "lose":
@@ -417,16 +425,15 @@ async def handle_claim_callback(update: Update, context: ContextTypes.DEFAULT_TY
             del active_matches[match_id]
 
 async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ውጭ ላይ የሚላኩ ፎቶዎች (ለምሳሌ በጨዋታ አለመግባባት ጊዜ የሚላኩ ስክሪንሻቶች)
     user_id = update.effective_user.id
     photo = update.message.photo[-1].file_id
 
-    found_match_id = None
     target_match = None
+    found_match_id = None
     for m_id, m_data in active_matches.items():
         if user_id in (m_data['p1'], m_data['p2']):
-            found_match_id = m_id
             target_match = m_data
+            found_match_id = m_id
             break
 
     if target_match:
@@ -446,7 +453,8 @@ async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_
             caption=f"⚠️ **የጨዋታ አለመግባባት (Dispute Screenshot)!**\n\n"
                     f"• የላከው User: `{user_id}`\n"
                     f"• ተጋጣሚ User: `{other_id}`\n"
-                    f"• የውርርድ መጠን: {amount} ብር",
+                    f"• የውርርድ መጠን: {amount} ብር\n\n"
+                    f"እባክዎን ከላይ ያለው ተጫዋች የላከውን ስክሪንሻት አረጋግጠው አሸናፊውን ይምረጡ:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -544,11 +552,12 @@ if __name__ == '__main__':
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Recharge Conversation Handler (አሁን ፎቶ ብቻ ይቀበላል)
+    # Recharge Conversation Handler (ስም እና ፎቶ የሚቀበልበት)
     recharge_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^💳 Recharge$"), handle_recharge_start)],
         states={
-            RECHARGE_PHOTO: [MessageHandler(filters.PHOTO, handle_recharge_photo_input)]
+            RECHARGE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_recharge_name)],
+            RECHARGE_PHOTO: [MessageHandler(filters.PHOTO, handle_recharge_photo)]
         },
         fallbacks=[CommandHandler("start", start)],
         allow_reentry=True
@@ -577,6 +586,8 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(check_join_callback, pattern="^check_join$"))
     app.add_handler(MessageHandler(filters.Regex("^💰 Balance$"), handle_balance))
     app.add_handler(MessageHandler(filters.Regex("^(⚽ eFootball|🎮 DLS)$"), handle_game_selection))
+    
+    # የጨዋታ አለመግባባት ፎቶዎች
     app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot_photo))
 
     app.add_handler(recharge_conv)
@@ -588,5 +599,5 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_)"))
     app.add_handler(CallbackQueryHandler(handle_mode_callback))
 
-    print("Bot is running with Screenshot Recharge mode...")
+    print("Bot is running perfectly...")
     app.run_polling()
