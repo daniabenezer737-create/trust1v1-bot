@@ -108,12 +108,32 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
+    first_name = query.from_user.first_name or "ወዳጃችን"
 
     if await is_user_member(context, user_id):
         await query.message.delete()
+        if user_id not in user_balances:
+            user_balances[user_id] = 0.0
+
+        reply_keyboard = [
+            ['⚽ eFootball', '🎮 DLS'],
+            ['💳 Recharge', '🏧 Withdraw'],
+            ['💰 Balance']
+        ]
+        markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+
+        welcome_text = (
+            f"ሰላም {first_name}! 👋\n"
+            f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
+            f"እዚህ ጋር ከሌሎች ተጫዋቾች ጋር በመወዳደርና በማሸነፍ የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
+            f"💳 **የአሁኑ ባላንስዎ፦** `{user_balances[user_id]} ብር`\n\n"
+            f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
+        )
         await context.bot.send_message(
             chat_id=user_id,
-            text="✅ ግሩፑን ስለተቀላቀሉ እናመሰግናለን! አሁን ቦቱን መጠቀም ይችላሉ። /start ይበሉ።"
+            text=welcome_text,
+            reply_markup=markup,
+            parse_mode="Markdown"
         )
     else:
         await query.message.edit_text(
@@ -437,7 +457,8 @@ if __name__ == '__main__':
         states={
             RECHARGE_TXID: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_recharge_txid)]
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=[CommandHandler("start", start)],
+        allow_reentry=True
     )
 
     withdraw_conv = ConversationHandler(
@@ -446,7 +467,8 @@ if __name__ == '__main__':
             WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_withdraw_amount)],
             WITHDRAW_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_withdraw_phone)]
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=[CommandHandler("start", start)],
+        allow_reentry=True
     )
 
     join_room_conv = ConversationHandler(
@@ -454,7 +476,8 @@ if __name__ == '__main__':
         states={
             JOIN_ROOM_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_join_code)]
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=[CommandHandler("start", start)],
+        allow_reentry=True
     )
 
     app.add_handler(CommandHandler("start", start))
