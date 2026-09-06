@@ -50,7 +50,7 @@ def update_user_balance(user_id: int, amount: float):
     db_conn.commit()
     return new_balance
 
-# Render Health Check Server
+# Render / Railway Health Check Server
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -72,7 +72,6 @@ MIN_DEPOSIT = 100
 MIN_WITHDRAW = 300
 MIN_PLAY_BALANCE = 100
 
-match_queues = {100: [], 200: [], 500: []}
 private_rooms = {}
 active_matches = {}
 
@@ -120,7 +119,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         f"ሰላም {first_name}! 👋\n"
         f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
-        f"እዚህ ጋር ከሌሎች ተጫዋቾች ጋር በመወዳደርና በማሸነፍ የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
+        f"እዚህ ጋር ከጓደኛዎ ጋር ሩም ፈጥረው በመወዳደር የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
         f"💳 **የአሁኑ ባላንስዎ፦** `{bal} ብር`\n\n"
         f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
     )
@@ -152,7 +151,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         welcome_text = (
             f"ሰላም {first_name}! 👋\n"
             f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
-            f"እዚህ ጋር ከሌሎች ተጫዋቾች ጋር በመወዳደርና በማሸነፍ የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
+            f"እዚህ ጋር ከጓደኛዎ ጋር ሩም ፈጥረው በመወዳደር የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
             f"💳 **የአሁኑ ባላንስዎ፦** `{bal} ብር`\n\n"
             f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
         )
@@ -301,7 +300,7 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(f"❌ ለ User `{user_id}` የ {amount} ብር ወጪ ጥያቄ ተሰርዟል፤ ብሩ ተመልሷል።", parse_mode="Markdown")
         await context.bot.send_message(user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል። አዲሱ ባላንስዎ: {new_bal} ብር")
 
-# Game Selection
+# Game Selection (Directly to Private Room Options)
 async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal = get_user_balance(user_id)
@@ -318,10 +317,10 @@ async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['game'] = text
 
     keyboard = [
-        [InlineKeyboardButton("🔍 1v1 ፈልግ (Random Match)", callback_data="mode_random")],
-        [InlineKeyboardButton("👥 ከጓደኛ ጋር (Play with Friend)", callback_data="mode_friend")]
+        [InlineKeyboardButton("🏠 ሩም ፍጠር (Create Room)", callback_data="friend_create")],
+        [InlineKeyboardButton("🔑 ሩም ተቀላቀል (Join Room)", callback_data="friend_join")]
     ]
-    await update.message.reply_text(f"ለ {text} የጨዋታ አይነት ይምረጡ፡", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(f"ለ {text} ከጓደኛ ጋር ለመጫወት የሚፈልጉትን ይምረጡ፡", reply_markup=InlineKeyboardMarkup(keyboard))
 
 # Start Match with Usernames
 async def start_match(context: ContextTypes.DEFAULT_TYPE, p1: int, p2: int, amount: float):
@@ -350,7 +349,7 @@ async def start_match(context: ContextTypes.DEFAULT_TYPE, p1: int, p2: int, amou
     markup = InlineKeyboardMarkup(keyboard)
 
     msg_p1 = (
-        f"🎮 **ተጋጣሚ ተገኝቷል!**\n\n"
+        f"🎮 **ጨዋታው ተጀምሯል!**\n\n"
         f"• ተጋጣሚ: `{name_p2}`\n"
         f"• የውርርድ መጠን: **{amount} ብር**\n"
         f"• ጠቅላላ ሽልማት: **{amount * 2} ብር**\n\n"
@@ -358,7 +357,7 @@ async def start_match(context: ContextTypes.DEFAULT_TYPE, p1: int, p2: int, amou
     )
     
     msg_p2 = (
-        f"🎮 **ተጋጣሚ ተገኝቷል!**\n\n"
+        f"🎮 **ጨዋታው ተጀምሯል!**\n\n"
         f"• ተጋጣሚ: `{name_p1}`\n"
         f"• የውርርድ መጠን: **{amount} ብር**\n"
         f"• ጠቅላላ ሽልማት: **{amount * 2} ብር**\n\n"
@@ -430,7 +429,6 @@ async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_
         p1, p2, amount = target_match['p1'], target_match['p2'], target_match['amount']
         other_id = p2 if user_id == p1 else p1
 
-        # አጭር callback_data በመጠቀም የ Telegram የ 64 ባይት ገደብ እንዳያልፍ ተደርጓል
         keyboard = [
             [
                 InlineKeyboardButton(f"🏆 User {user_id} አሸናፊ", callback_data=f"dwin_{found_match_id}_{user_id}"),
@@ -482,45 +480,7 @@ async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
 
-    if query.data == "mode_random":
-        keyboard = [
-            [InlineKeyboardButton("100 ብር", callback_data="queue_100"),
-             InlineKeyboardButton("200 ብር", callback_data="queue_200"),
-             InlineKeyboardButton("500 ብር", callback_data="queue_500")]
-        ]
-        await query.edit_message_text("የውርርድ መጠን ይምረጡ (Matchmaking Queue)፡", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data == "mode_friend":
-        keyboard = [
-            [InlineKeyboardButton("🏠 ሩም ፍጠር (Create)", callback_data="friend_create")],
-            [InlineKeyboardButton("🔑 ሩም ተቀላቀል (Join)", callback_data="friend_join")]
-        ]
-        await query.edit_message_text("ከጓደኛ ጋር ለመጫወት ይምረጡ፡", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data.startswith("queue_"):
-        amount = int(query.data.split("_")[1])
-        user_id = query.from_user.id
-        bal = get_user_balance(user_id)
-
-        if bal < amount:
-            await query.edit_message_text(f"❌ በቂ ባላንስ የለዎትም! (የእርስዎ ባላንስ: {bal} ብር)")
-            return
-
-        if user_id in match_queues[amount]:
-            await query.edit_message_text("⏳ አስቀድመው Queue ውስጥ አሉ! ተጋጣሚ እስኪገኝ ይጠብቁ...")
-            return
-
-        match_queues[amount].append(user_id)
-
-        if len(match_queues[amount]) >= 2:
-            p1 = match_queues[amount].pop(0)
-            p2 = match_queues[amount].pop(0)
-            await query.edit_message_text("🎉 ተጋጣሚ ተገኝቷል! ጨዋታው በመጀመር ላይ ነው...")
-            await start_match(context, p1, p2, amount)
-        else:
-            await query.edit_message_text(f"⏳ ለ {amount} ብር ተጋጣሚ በመፈለግ ላይ... እባክዎን ትንሽ ይጠብቁ።")
-
-    elif query.data == "friend_create":
+    if query.data == "friend_create":
         keyboard = [
             [InlineKeyboardButton("100 ብር", callback_data="create_100"),
              InlineKeyboardButton("200 ብር", callback_data="create_200"),
@@ -544,7 +504,7 @@ async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             f"✅ ሩም ተፈጥሯል!\n\n"
             f"📌 **የሩም ID (Code)**: `{room_code}`\n"
             f"💰 **የውርርድ መጠን**: {amount} ብር\n\n"
-            f"ይህንን የሩም ID ለጓደኛዎ ይላኩለት።",
+            f"ይህንን የሩም ID (ኮድ) ለጓደኛዎ ይላኩለት። ጓደኛዎ ቦቱ ላይ በመግባት 'ሩም ተቀላቀል' የሚለውን በመጫን ይህንን ኮድ ያስገባል።",
             parse_mode="Markdown"
         )
 
@@ -560,6 +520,10 @@ async def handle_join_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = room['amount']
         user_id = update.effective_user.id
 
+        if user_id == host_id:
+            await update.message.reply_text("❌ የፈጠሩትን ሩም እርስዎራሱ መቀላቀል አይችሉም። ሌላ ኮድ ያስገቡ፦")
+            return JOIN_ROOM_STATE
+
         bal = get_user_balance(user_id)
         if bal < amount:
             await update.message.reply_text(f"❌ በቂ ባላንስ የለዎትም! (የእርስዎ ባላንስ: {bal} ብር)")
@@ -568,8 +532,8 @@ async def handle_join_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await start_match(context, host_id, user_id, amount)
         return ConversationHandler.END
     else:
-        await update.message.reply_text("❌ የገባው Room ID አልተገኘም። /start ብለው እንደገና ይሞክሩ።")
-        return ConversationHandler.END
+        await update.message.reply_text("❌ የገባው Room ID አልተገኘም። እባክዎን ትክክለኛውን ኮድ እንደገና ያስገቡ፦")
+        return JOIN_ROOM_STATE
 
 if __name__ == '__main__':
     threading.Thread(target=run_health_check_server, daemon=True).start()
@@ -619,5 +583,6 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_)"))
     app.add_handler(CallbackQueryHandler(handle_mode_callback))
 
-    print("Bot is running with full fixes (SQLite, Username & Fixed Dispute Callback)...")
+    print("Bot is running with Private Room only mode...")
     app.run_polling()
+
