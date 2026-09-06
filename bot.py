@@ -172,7 +172,7 @@ async def handle_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bal = get_user_balance(user_id)
     await update.message.reply_text(f"💳 **የእርስዎ ባላንስ፦** {bal} ብር", parse_mode="Markdown")
 
-# --- Recharge Process (ስም እና ፎቶ መቀበያ) ---
+# --- Recharge Process ---
 async def handle_recharge_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📥 **ብር ገቢ ማድረጊያ (Recharge)**\n\n"
@@ -460,6 +460,7 @@ async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_
         )
         await update.message.reply_text("✅ ስክሪንሻቱ ለ Admin ተልኳል። ማጣራቱ እንደተጠናቀቀ አሸናፊው ይፋ ይደረጋል!")
     else:
+        # ውጭ ላይ የሚላኩ ሌሎች ፎቶዎች (ለምሳሌ Recharge ካልሆነ ውጭ)
         await update.message.reply_text("❌ በአሁኑ ሰዓት አለመግባባት ውስጥ ያለ ጨዋታ አልተገኘም።")
 
 async def handle_admin_dispute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -552,7 +553,7 @@ if __name__ == '__main__':
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Recharge Conversation Handler (ስም እና ፎቶ የሚቀበልበት)
+    # Recharge Conversation Handler (ስም እና ፎቶ በቅደም ተከተል የሚቀበል)
     recharge_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^💳 Recharge$"), handle_recharge_start)],
         states={
@@ -586,13 +587,14 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(check_join_callback, pattern="^check_join$"))
     app.add_handler(MessageHandler(filters.Regex("^💰 Balance$"), handle_balance))
     app.add_handler(MessageHandler(filters.Regex("^(⚽ eFootball|🎮 DLS)$"), handle_game_selection))
-    
-    # የጨዋታ አለመግባባት ፎቶዎች
-    app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot_photo))
 
+    # **አስፈላጊ ማስተካከያ**: የ Recharge ConversationHandler ከጠቅላላው ፎቶ ሀንድለር አስቀድሞ መመዝገብ አለበት!
     app.add_handler(recharge_conv)
     app.add_handler(withdraw_conv)
     app.add_handler(join_room_conv)
+
+    # አጠቃላይ የጨዋታ አለመግባባት ፎቶዎች (ከ Recharge ውጭ ላሉት)
+    app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot_photo))
 
     app.add_handler(CallbackQueryHandler(handle_claim_callback, pattern="^claim_"))
     app.add_handler(CallbackQueryHandler(handle_admin_dispute, pattern="^dwin_"))
@@ -601,3 +603,4 @@ if __name__ == '__main__':
 
     print("Bot is running perfectly...")
     app.run_polling()
+
