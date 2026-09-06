@@ -76,7 +76,7 @@ private_rooms = {}
 active_matches = {}
 
 JOIN_ROOM_STATE = 1
-RECHARGE_TXID = 2
+RECHARGE_PHOTO = 2  # ስክሪንሻት መቀበያ ስቴት
 WITHDRAW_AMOUNT, WITHDRAW_PHONE = 3, 4
 
 def generate_room_code():
@@ -172,7 +172,7 @@ async def handle_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bal = get_user_balance(user_id)
     await update.message.reply_text(f"💳 **የእርስዎ ባላንስ፦** {bal} ብር", parse_mode="Markdown")
 
-# Recharge Handler
+# Recharge Handler (Screenshot based)
 async def handle_recharge_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📥 **ብር ገቢ ማድረጊያ (Recharge)**\n\n"
@@ -180,13 +180,17 @@ async def handle_recharge_start(update: Update, context: ContextTypes.DEFAULT_TY
         f"📲 **Telebirr Details:**\n"
         f"• ስልክ፦ `{TELEBIRR_PHONE}`\n"
         f"• ስም፦ **{TELEBIRR_NAME}**\n\n"
-        f"እባክዎን ብር ከላኩ በኋላ የ **Transaction ID** (ግብይት ቁጥር) ወይም የላኩበትን መጠን እና TXID እዚህ ጽፈው ይላኩ፦"
+        f"እባክዎን ብር ከላኩ በኋላ የከፈሉበትን **ስክሪንሻት (Screenshot ፎቶ)** እዚህ ይላኩ፦"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
-    return RECHARGE_TXID
+    return RECHARGE_PHOTO
 
-async def handle_recharge_txid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    txid = update.message.text.strip()
+async def handle_recharge_photo_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.photo:
+        await update.message.reply_text("❌ እባክዎን የቴሌብር ክፍያ የፈጸሙበትን **ስክሪንሻት (Screenshot ፎቶ)** ብቻ ይላኩ!")
+        return RECHARGE_PHOTO
+
+    photo = update.message.photo[-1].file_id
     user_id = update.effective_user.id
 
     keyboard = [
@@ -200,17 +204,17 @@ async def handle_recharge_txid(update: Update, context: ContextTypes.DEFAULT_TYP
         ]
     ]
 
-    await context.bot.send_message(
+    await context.bot.send_photo(
         chat_id=ADMIN_ID,
-        text=f"🔔 **አዲስ የ Recharge ጥያቄ!**\n\n"
-             f"• User ID: `{user_id}`\n"
-             f"• TXID/የተላከ ጽሁፍ: `{txid}`\n\n"
-             f"እባክዎን ሂሳቡን በ Telebirr አረጋግጠው ይምረጡ፦",
+        photo=photo,
+        caption=f"🔔 **አዲስ የ Recharge (የገቢ) ጥያቄ!**\n\n"
+                f"• User ID: `{user_id}`\n\n"
+                f"እባክዎን ስክሪንሻቱን አረጋግጠው የሚፈለገውን የብር መጠን ይምረጡ፦",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-    await update.message.reply_text("✅ የገቢ ጥያቄዎ ለ Admin ተልኳል። እንደተረጋገጠ ባላንስዎ ላይ ይጨመራል!")
+    await update.message.reply_text("✅ የገቢ ማረጋገጫ ፎቶዎ ለ Admin ተልኳል። ሲረጋገጥ ባላንስዎ ላይ ይጨመራል!")
     return ConversationHandler.END
 
 # Withdraw Handler
@@ -285,7 +289,7 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("rej_rec_"):
         user_id = int(data.split("_")[2])
         await query.edit_message_text(f"❌ ለ User `{user_id}` የገቢ ጥያቄ ተሰርዟል።", parse_mode="Markdown")
-        await context.bot.send_message(user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን የላኩትን Transaction ID አረጋግጠው እንደገና ይሞክሩ።")
+        await context.bot.send_message(user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን የላኩትን ስክሪንሻት አረጋግጠው እንደገና ይሞክሩ።")
 
     elif data.startswith("app_wd_"):
         _, _, user_id, amount = data.split("_")
@@ -300,7 +304,7 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(f"❌ ለ User `{user_id}` የ {amount} ብር ወጪ ጥያቄ ተሰርዟል፤ ብሩ ተመልሷል።", parse_mode="Markdown")
         await context.bot.send_message(user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል። አዲሱ ባላንስዎ: {new_bal} ብር")
 
-# Game Selection (Directly to Private Room Options)
+# Game Selection
 async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal = get_user_balance(user_id)
@@ -322,7 +326,6 @@ async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TY
     ]
     await update.message.reply_text(f"ለ {text} ከጓደኛ ጋር ለመጫወት የሚፈልጉትን ይምረጡ፡", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# Start Match with Usernames
 async def start_match(context: ContextTypes.DEFAULT_TYPE, p1: int, p2: int, amount: float):
     update_user_balance(p1, -amount)
     update_user_balance(p2, -amount)
@@ -414,6 +417,7 @@ async def handle_claim_callback(update: Update, context: ContextTypes.DEFAULT_TY
             del active_matches[match_id]
 
 async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ውጭ ላይ የሚላኩ ፎቶዎች (ለምሳሌ በጨዋታ አለመግባባት ጊዜ የሚላኩ ስክሪንሻቶች)
     user_id = update.effective_user.id
     photo = update.message.photo[-1].file_id
 
@@ -540,10 +544,11 @@ if __name__ == '__main__':
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Recharge Conversation Handler (አሁን ፎቶ ብቻ ይቀበላል)
     recharge_conv = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^💳 Recharge$"), handle_recharge_start)],
         states={
-            RECHARGE_TXID: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_recharge_txid)]
+            RECHARGE_PHOTO: [MessageHandler(filters.PHOTO, handle_recharge_photo_input)]
         },
         fallbacks=[CommandHandler("start", start)],
         allow_reentry=True
@@ -583,6 +588,5 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_)"))
     app.add_handler(CallbackQueryHandler(handle_mode_callback))
 
-    print("Bot is running with Private Room only mode...")
+    print("Bot is running with Screenshot Recharge mode...")
     app.run_polling()
-
