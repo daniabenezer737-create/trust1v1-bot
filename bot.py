@@ -3,6 +3,7 @@ import logging
 import random
 import string
 import threading
+import sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
@@ -19,6 +20,35 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+
+# --- SQLite Database Setup (ባላንስ ፈጽሞ እንዳይጠፋ) ---
+def init_db():
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS balances (
+            user_id INTEGER PRIMARY KEY,
+            balance REAL
+        )
+    ''')
+    conn.commit()
+    return conn, cursor
+
+db_conn, db_cursor = init_db()
+
+def get_user_balance(user_id: int) -> float:
+    db_cursor.execute('SELECT balance FROM balances WHERE user_id = ?', (user_id,))
+    row = db_cursor.fetchone()
+    if row is None:
+        return 0.0
+    return row[0]
+
+def update_user_balance(user_id: int, amount: float):
+    current = get_user_balance(user_id)
+    new_balance = current + amount
+    db_cursor.execute('INSERT OR REPLACE INTO balances (user_id, balance) VALUES (?, ?)', (user_id, new_balance))
+    db_conn.commit()
+    return new_balance
 
 # Render Health Check Server
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -42,7 +72,6 @@ MIN_DEPOSIT = 100
 MIN_WITHDRAW = 300
 MIN_PLAY_BALANCE = 100
 
-user_balances = {}
 match_queues = {100: [], 200: [], 500: []}
 private_rooms = {}
 active_matches = {}
@@ -65,8 +94,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     first_name = update.effective_user.first_name or "ወዳጃችን"
 
-    if user_id not in user_balances:
-        user_balances[user_id] = 0.0
+    bal = get_user_balance(user_id)
 
     is_member = await is_user_member(context, user_id)
     if not is_member:
@@ -93,7 +121,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"ሰላም {first_name}! 👋\n"
         f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
         f"እዚህ ጋር ከሌሎች ተጫዋቾች ጋር በመወዳደርና በማሸነፍ የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
-        f"💳 **የአሁኑ ባላንስዎ፦** `{user_balances[user_id]} ብር`\n\n"
+        f"💳 **የአሁኑ ባላንስዎ፦** `{bal} ብር`\n\n"
         f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
     )
 
@@ -112,8 +140,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if await is_user_member(context, user_id):
         await query.message.delete()
-        if user_id not in user_balances:
-            user_balances[user_id] = 0.0
+        bal = get_user_balance(user_id)
 
         reply_keyboard = [
             ['⚽ eFootball', '🎮 DLS'],
@@ -126,7 +153,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"ሰላም {first_name}! 👋\n"
             f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
             f"እዚህ ጋር ከሌሎች ተጫዋቾች ጋር በመወዳደርና በማሸነፍ የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
-            f"💳 **የአሁኑ ባላንስዎ፦** `{user_balances[user_id]} ብር`\n\n"
+            f"💳 **የአሁኑ ባላንስዎ፦** `{bal} ብር`\n\n"
             f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
         )
         await context.bot.send_message(
@@ -143,7 +170,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    bal = user_balances.get(user_id, 0.0)
+    bal = get_user_balance(user_id)
     await update.message.reply_text(f"💳 **የእርስዎ ባላንስ፦** {bal} ብር", parse_mode="Markdown")
 
 # Recharge Handler
@@ -190,7 +217,7 @@ async def handle_recharge_txid(update: Update, context: ContextTypes.DEFAULT_TYP
 # Withdraw Handler
 async def handle_withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    bal = user_balances.get(user_id, 0.0)
+    bal = get_user_balance(user_id)
 
     if bal < MIN_WITHDRAW:
         await update.message.reply_text(f"❌ ብር ለማውጣት በትንሹ **{MIN_WITHDRAW} ብር** ባላንስ መኖር አለበት።\nየእርስዎ ባላንስ፦ {bal} ብር", parse_mode="Markdown")
@@ -203,7 +230,7 @@ async def handle_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_T
     try:
         amount = float(update.message.text.strip())
         user_id = update.effective_user.id
-        bal = user_balances.get(user_id, 0.0)
+        bal = get_user_balance(user_id)
 
         if amount < MIN_WITHDRAW or amount > bal:
             await update.message.reply_text("❌ ያልተስተካከለ የብር መጠን ወይም በቂ ያልሆነ ባላንስ። እንደገና ይሞክሩ፦")
@@ -221,7 +248,7 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = update.effective_user.id
     amount = context.user_data.get('withdraw_amount')
 
-    user_balances[user_id] -= amount
+    update_user_balance(user_id, -amount)
 
     keyboard = [
         [
@@ -252,9 +279,9 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     if data.startswith("app_rec_"):
         _, _, user_id, amount = data.split("_")
         user_id, amount = int(user_id), float(amount)
-        user_balances[user_id] = user_balances.get(user_id, 0.0) + amount
+        new_bal = update_user_balance(user_id, amount)
         await query.edit_message_text(f"✅ ለ User `{user_id}` {amount} ብር ገቢ ተደርጓል።", parse_mode="Markdown")
-        await context.bot.send_message(user_id, f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፡ {user_balances[user_id]} ብር")
+        await context.bot.send_message(user_id, f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፡ {new_bal} ብር")
 
     elif data.startswith("rej_rec_"):
         user_id = int(data.split("_")[2])
@@ -270,24 +297,14 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("rej_wd_"):
         _, _, user_id, amount = data.split("_")
         user_id, amount = int(user_id), float(amount)
-        user_balances[user_id] = user_balances.get(user_id, 0.0) + amount
+        new_bal = update_user_balance(user_id, amount)
         await query.edit_message_text(f"❌ ለ User `{user_id}` የ {amount} ብር ወጪ ጥያቄ ተሰርዟል፤ ብሩ ተመልሷል።", parse_mode="Markdown")
-        await context.bot.send_message(user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል።")
-
-    elif data.startswith("dispute_win_"):
-        _, _, winner_id, loser_id, amount = data.split("_")
-        winner_id, loser_id, amount = int(winner_id), int(loser_id), float(amount)
-        prize = amount * 2
-        user_balances[winner_id] = user_balances.get(winner_id, 0.0) + prize
-
-        await query.edit_message_text(f"✅ አሸናፊው User `{winner_id}` ተለይቷል። {prize} ብር ተጨምሮለታል።", parse_mode="Markdown")
-        await context.bot.send_message(winner_id, f"🎉 Admin ውጤቱን አረጋግጧል! የ {prize} ብር ሽልማት ባላንስዎ ላይ ተጨምሯል።")
-        await context.bot.send_message(loser_id, f"❌ Admin ውጤቱን አረጋግጧል! በጨዋታው ተሸንፈዋል።")
+        await context.bot.send_message(user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል። አዲሱ ባላንስዎ: {new_bal} ብር")
 
 # Game Selection
 async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    bal = user_balances.get(user_id, 0.0)
+    bal = get_user_balance(user_id)
 
     if bal < MIN_PLAY_BALANCE:
         await update.message.reply_text(
@@ -306,21 +323,50 @@ async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TY
     ]
     await update.message.reply_text(f"ለ {text} የጨዋታ አይነት ይምረጡ፡", reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def start_match(context, p1, p2, amount):
+# Start Match with Usernames
+async def start_match(context: ContextTypes.DEFAULT_TYPE, p1: int, p2: int, amount: float):
+    update_user_balance(p1, -amount)
+    update_user_balance(p2, -amount)
+
     match_id = f"{p1}_{p2}_{amount}"
     active_matches[match_id] = {'p1': p1, 'p2': p2, 'amount': amount, 'claims': {}}
 
-    user_balances[p1] -= amount
-    user_balances[p2] -= amount
+    try:
+        chat_p1 = await context.bot.get_chat(p1)
+        name_p1 = f"@{chat_p1.username}" if chat_p1.username else chat_p1.first_name
+    except Exception:
+        name_p1 = str(p1)
+
+    try:
+        chat_p2 = await context.bot.get_chat(p2)
+        name_p2 = f"@{chat_p2.username}" if chat_p2.username else chat_p2.first_name
+    except Exception:
+        name_p2 = str(p2)
 
     keyboard = [
-        [InlineKeyboardButton("🏆 እኔ አሸንፌአለሁ", callback_data=f"claim_win_{match_id}")],
+        [InlineKeyboardButton("🏆 አሸንፌአለሁ", callback_data=f"claim_win_{match_id}")],
         [InlineKeyboardButton("❌ ተሸንፌአለሁ", callback_data=f"claim_lose_{match_id}")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
 
-    await context.bot.send_message(p1, f"🎉 ጨዋታው ተጀምሯል! የውርርድ መጠን፡ {amount} ብር።\nጨዋታው ሲያልቅ ውጤቱን ይምረጡ፡", reply_markup=markup)
-    await context.bot.send_message(p2, f"🎉 ጨዋታው ተጀምሯል! የውርርድ መጠን፡ {amount} ብር።\nጨዋታው ሲያልቅ ውጤቱን ይምረጡ፡", reply_markup=markup)
+    msg_p1 = (
+        f"🎮 **ተጋጣሚ ተገኝቷል!**\n\n"
+        f"• ተጋጣሚ: `{name_p2}`\n"
+        f"• የውርርድ መጠን: **{amount} ብር**\n"
+        f"• ጠቅላላ ሽልማት: **{amount * 2} ብር**\n\n"
+        f"ጨዋታው ሲያልቅ ውጤቱን ይምረጡ:"
+    )
+    
+    msg_p2 = (
+        f"🎮 **ተጋጣሚ ተገኝቷል!**\n\n"
+        f"• ተጋጣሚ: `{name_p1}`\n"
+        f"• የውርርድ መጠን: **{amount} ብር**\n"
+        f"• ጠቅላላ ሽልማት: **{amount * 2} ብር**\n\n"
+        f"ጨዋታው ሲያልቅ ውጤቱን ይምረጡ:"
+    )
+
+    await context.bot.send_message(p1, msg_p1, reply_markup=markup, parse_mode="Markdown")
+    await context.bot.send_message(p2, msg_p2, reply_markup=markup, parse_mode="Markdown")
 
 async def handle_claim_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -328,48 +374,104 @@ async def handle_claim_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     data = query.data
 
-    action, match_id = data.split("_")[1], data.split("_")[2]
+    parts = data.split("_")
+    action = parts[1]
+    match_id = "_".join(parts[2:])
 
     if match_id not in active_matches:
-        await query.edit_message_text("ይህ ጨዋታ ተጠናቋል ወይም አልተገኘም።")
+        await query.edit_message_text("❌ ይህ ጨዋታ ተጠናቋል ወይም አልተገኘም።")
         return
 
     match = active_matches[match_id]
-    match['claims'][user_id] = action
-
     p1, p2, amount = match['p1'], match['p2'], match['amount']
 
+    match['claims'][user_id] = action
+    await query.edit_message_text("✅ የጨዋታው ውጤት ምላሽዎ ተመዝግቧል። ተጋጣሚዎ ምላሽ እስኪሰጥ ይጠብቁ...")
+
     if len(match['claims']) == 2:
-        c1, c2 = match['claims'][p1], match['claims'][p2]
+        c1, c2 = match['claims'].get(p1), match['claims'].get(p2)
+        prize = amount * 2
 
         if c1 == "win" and c2 == "win":
-            msg = "⚠️ ሁለታችሁም አሸንፌአለሁ ብላችኋል! እባክዎን የጨዋታውን ውጤት የሚያሳይ Screenshot በዚህ ቦት ላይ ይላኩ።"
+            msg = "⚠️ ሁለታችሁም 'አሸንፌአለሁ' ብላችኋል! እባክዎን የጨዋታውን የማጠናቀቂያ Screenshot በዚህ ቦት ላይ ይላኩ።"
             await context.bot.send_message(p1, msg)
             await context.bot.send_message(p2, msg)
         elif c1 == "win" and c2 == "lose":
-            prize = amount * 2
-            user_balances[p1] += prize
-            await context.bot.send_message(p1, f"🎉 እንኳን ደስ አለዎት! {prize} ብር አሸንፈዋል።")
+            new_p1_bal = update_user_balance(p1, prize)
+            await context.bot.send_message(p1, f"🎉 እንኳን ደስ አለዎት! {prize} ብር አሸንፈዋል። አዲሱ ባላንስዎ: {new_p1_bal} ብር")
             await context.bot.send_message(p2, f"❌ በጨዋታው ተሸንፈዋል።")
             del active_matches[match_id]
         elif c2 == "win" and c1 == "lose":
-            prize = amount * 2
-            user_balances[p2] += prize
-            await context.bot.send_message(p2, f"🎉 እንኳን ደስ አለዎት! {prize} ብር አሸንፈዋል።")
+            new_p2_bal = update_user_balance(p2, prize)
+            await context.bot.send_message(p2, f"🎉 እንኳን ደስ አለዎት! {prize} ብር አሸንፈዋል። አዲሱ ባላንስዎ: {new_p2_bal} ብር")
             await context.bot.send_message(p1, f"❌ በጨዋታው ተሸንፈዋል።")
+            del active_matches[match_id]
+        elif c1 == "lose" and c2 == "lose":
+            update_user_balance(p1, amount)
+            update_user_balance(p2, amount)
+            msg = "⚠️ ሁለታችሁም 'ተሸንፌአለሁ' ስላላችሁ የተያዘው ብር ተመልሷል።"
+            await context.bot.send_message(p1, msg)
+            await context.bot.send_message(p2, msg)
             del active_matches[match_id]
 
 async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     photo = update.message.photo[-1].file_id
 
-    await context.bot.send_photo(
-        chat_id=ADMIN_ID,
-        photo=photo,
-        caption=f"⚠️ **የጨዋታ አለመግባባት (Dispute Screenshot)!**\nUser ID: `{user_id}`",
-        parse_mode="Markdown"
-    )
-    await update.message.reply_text("✅ ስክሪንሻቱ ለ Admin ተልኳል። ማጣራቱ እንደተጠናቀቀ አሸናፊው ይፋ ይደረጋል!")
+    found_match_id = None
+    target_match = None
+    for m_id, m_data in active_matches.items():
+        if user_id in (m_data['p1'], m_data['p2']):
+            found_match_id = m_id
+            target_match = m_data
+            break
+
+    if target_match:
+        p1, p2, amount = target_match['p1'], target_match['p2'], target_match['amount']
+        other_id = p2 if user_id == p1 else p1
+
+        keyboard = [
+            [
+                InlineKeyboardButton(f"🏆 User {user_id} አሸናፊ", callback_data=f"dispute_win_{user_id}_{other_id}_{amount}_{found_match_id}"),
+                InlineKeyboardButton(f"🏆 User {other_id} አሸናፊ", callback_data=f"dispute_win_{other_id}_{user_id}_{amount}_{found_match_id}")
+            ]
+        ]
+
+        await context.bot.send_photo(
+            chat_id=ADMIN_ID,
+            photo=photo,
+            caption=f"⚠️ **የጨዋታ አለመግባባት (Dispute Screenshot)!**\n\n"
+                    f"• የላከው User: `{user_id}`\n"
+                    f"• ተጋጣሚ User: `{other_id}`\n"
+                    f"• የውርርድ መጠን: {amount} ብር",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await update.message.reply_text("✅ ስክሪንሻቱ ለ Admin ተልኳል። ማጣራቱ እንደተጠናቀቀ አሸናፊው ይፋ ይደረጋል!")
+    else:
+        await update.message.reply_text("❌ በአሁኑ ሰዓት አለመግባባት ውስጥ ያለ ጨዋታ አልተገኘም።")
+
+async def handle_admin_dispute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("dispute_win_"):
+        parts = data.split("_")
+        winner_id = int(parts[2])
+        loser_id = int(parts[3])
+        amount = float(parts[4])
+        match_id = "_".join(parts[5:])
+
+        prize = amount * 2
+        new_winner_bal = update_user_balance(winner_id, prize)
+
+        if match_id in active_matches:
+            del active_matches[match_id]
+
+        await query.edit_message_text(f"✅ አሸናፊው User `{winner_id}` ተለይቷል። {prize} ብር ተጨምሮለታል።", parse_mode="Markdown")
+        await context.bot.send_message(winner_id, f"🎉 Admin ውጤቱን አረጋግጧል! የ {prize} ብር ሽልማት ባላንስዎ ላይ ተጨምሯል። አዲሱ ባላንስዎ: {new_winner_bal} ብር")
+        await context.bot.send_message(loser_id, f"❌ Admin ውጤቱን አረጋግጧል! በጨዋታው ተሸንፈዋል።")
 
 async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -393,9 +495,14 @@ async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     elif query.data.startswith("queue_"):
         amount = int(query.data.split("_")[1])
         user_id = query.from_user.id
+        bal = get_user_balance(user_id)
+
+        if bal < amount:
+            await query.edit_message_text(f"❌ በቂ ባላንስ የለዎትም! (የእርስዎ ባላንስ: {bal} ብር)")
+            return
 
         if user_id in match_queues[amount]:
-            await query.edit_message_text("አስቀድመው Queue ውስጥ አሉ! ተጋጣሚ እስኪገኝ ይጠብቁ...")
+            await query.edit_message_text("⏳ አስቀድመው Queue ውስጥ አሉ! ተጋጣሚ እስኪገኝ ይጠብቁ...")
             return
 
         match_queues[amount].append(user_id)
@@ -403,8 +510,8 @@ async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         if len(match_queues[amount]) >= 2:
             p1 = match_queues[amount].pop(0)
             p2 = match_queues[amount].pop(0)
+            await query.edit_message_text("🎉 ተጋጣሚ ተገኝቷል! ጨዋታው በመጀመር ላይ ነው...")
             await start_match(context, p1, p2, amount)
-            await query.edit_message_text("🎉 ተጋጣሚ ተገኝቷል! ጨዋታው ተጀምሯል።")
         else:
             await query.edit_message_text(f"⏳ ለ {amount} ብር ተጋጣሚ በመፈለግ ላይ... እባክዎን ትንሽ ይጠብቁ።")
 
@@ -418,8 +525,15 @@ async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif query.data.startswith("create_"):
         amount = int(query.data.split("_")[1])
+        user_id = query.from_user.id
+        bal = get_user_balance(user_id)
+
+        if bal < amount:
+            await query.edit_message_text(f"❌ በቂ ባላንስ የለዎትም! (የእርስዎ ባላንስ: {bal} ብር)")
+            return
+
         room_code = generate_room_code()
-        private_rooms[room_code] = {'host': query.from_user.id, 'amount': amount}
+        private_rooms[room_code] = {'host': user_id, 'amount': amount}
 
         await query.edit_message_text(
             f"✅ ሩም ተፈጥሯል!\n\n"
@@ -440,6 +554,11 @@ async def handle_join_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         host_id = room['host']
         amount = room['amount']
         user_id = update.effective_user.id
+
+        bal = get_user_balance(user_id)
+        if bal < amount:
+            await update.message.reply_text(f"❌ በቂ ባላንስ የለዎትም! (የእርስዎ ባላንስ: {bal} ብር)")
+            return ConversationHandler.END
 
         await start_match(context, host_id, user_id, amount)
         return ConversationHandler.END
@@ -491,8 +610,10 @@ if __name__ == '__main__':
     app.add_handler(join_room_conv)
 
     app.add_handler(CallbackQueryHandler(handle_claim_callback, pattern="^claim_"))
-    app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_|dispute_)"))
+    app.add_handler(CallbackQueryHandler(handle_admin_dispute, pattern="^dispute_win_"))
+    app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_)"))
     app.add_handler(CallbackQueryHandler(handle_mode_callback))
 
-    print("Bot is running on Render...")
+    print("Bot is running with persistent SQLite and Username support...")
     app.run_polling()
+
