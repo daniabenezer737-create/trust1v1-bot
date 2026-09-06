@@ -430,10 +430,11 @@ async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_
         p1, p2, amount = target_match['p1'], target_match['p2'], target_match['amount']
         other_id = p2 if user_id == p1 else p1
 
+        # አጭር callback_data በመጠቀም የ Telegram የ 64 ባይት ገደብ እንዳያልፍ ተደርጓል
         keyboard = [
             [
-                InlineKeyboardButton(f"🏆 User {user_id} አሸናፊ", callback_data=f"dispute_win_{user_id}_{other_id}_{amount}_{found_match_id}"),
-                InlineKeyboardButton(f"🏆 User {other_id} አሸናፊ", callback_data=f"dispute_win_{other_id}_{user_id}_{amount}_{found_match_id}")
+                InlineKeyboardButton(f"🏆 User {user_id} አሸናፊ", callback_data=f"dwin_{found_match_id}_{user_id}"),
+                InlineKeyboardButton(f"🏆 User {other_id} አሸናፊ", callback_data=f"dwin_{found_match_id}_{other_id}")
             ]
         ]
 
@@ -456,18 +457,22 @@ async def handle_admin_dispute(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     data = query.data
 
-    if data.startswith("dispute_win_"):
-        parts = data.split("_")
-        winner_id = int(parts[2])
-        loser_id = int(parts[3])
-        amount = float(parts[4])
-        match_id = "_".join(parts[5:])
+    if data.startswith("dwin_"):
+        _, match_id, winner_str = data.split("_", 2)
+        winner_id = int(winner_str)
+
+        if match_id not in active_matches:
+            await query.edit_message_text("❌ ይህ ጨዋታ ቀድሞ ተዘግቷል ወይም አልተገኘም።")
+            return
+
+        match = active_matches[match_id]
+        p1, p2, amount = match['p1'], match['p2'], match['amount']
+        loser_id = p2 if winner_id == p1 else p1
 
         prize = amount * 2
         new_winner_bal = update_user_balance(winner_id, prize)
-
-        if match_id in active_matches:
-            del active_matches[match_id]
+        
+        del active_matches[match_id]
 
         await query.edit_message_text(f"✅ አሸናፊው User `{winner_id}` ተለይቷል። {prize} ብር ተጨምሮለታል።", parse_mode="Markdown")
         await context.bot.send_message(winner_id, f"🎉 Admin ውጤቱን አረጋግጧል! የ {prize} ብር ሽልማት ባላንስዎ ላይ ተጨምሯል። አዲሱ ባላንስዎ: {new_winner_bal} ብር")
@@ -610,10 +615,9 @@ if __name__ == '__main__':
     app.add_handler(join_room_conv)
 
     app.add_handler(CallbackQueryHandler(handle_claim_callback, pattern="^claim_"))
-    app.add_handler(CallbackQueryHandler(handle_admin_dispute, pattern="^dispute_win_"))
+    app.add_handler(CallbackQueryHandler(handle_admin_dispute, pattern="^dwin_"))
     app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_)"))
     app.add_handler(CallbackQueryHandler(handle_mode_callback))
 
-    print("Bot is running with persistent SQLite and Username support...")
+    print("Bot is running with full fixes (SQLite, Username & Fixed Dispute Callback)...")
     app.run_polling()
-
