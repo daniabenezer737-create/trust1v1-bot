@@ -9,4 +9,3 @@ COPY . .
 
 ENTRYPOINT ["python"]
 CMD ["bot.py"]
-flask
