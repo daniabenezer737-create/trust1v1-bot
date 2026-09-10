@@ -62,7 +62,7 @@ def run_health_check_server():
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
     server.serve_forever()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8640582909:AAEWINflMuUocmywDZrvIMjV_up84BHDF6I")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8640582909:AAHNm46gYHrqdeBhe_I9ccfNe8Vax6I8sNM")
 ADMIN_ID = 5283089413
 GROUP_USERNAME = "@trust1v1"
 TELEBIRR_PHONE = "0940472271"
