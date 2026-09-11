@@ -281,7 +281,7 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ የ {amount} ብር ማውጣት ጥያቄዎ ለ Admin ተልኳል። በቅርቡ ገቢ ይደረጋል!")
     return ConversationHandler.END
 
-# --- ADMIN CALLBACKS (የተስተካከለው እና የጠራው ክፍል) ---
+# --- ADMIN CALLBACKS (የተስተካከለው እና ቻቱ የሚጠፋበት ክፍል) ---
 async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -304,7 +304,11 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         # የገቢውን መጠን ተጠቃሚው ባላንስ ላይ በራሱ ይጨምረዋል
         new_bal = update_user_balance(target_user_id, amount)
         
-        await query.edit_message_text(f"✅ ለ User `{target_user_id}` በስኬት የ {amount} ብር ገቢ ተደርጓል።", parse_mode="Markdown")
+        # የአድሚኑን ቻት (ፎቶ እና ቁልፎቹን) ሙሉ በሙሉ ማጥፋት
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
         
         # ለተጠቃሚው በቀጥታ ገቢ መደረጉን የሚገልጽ መልእክት ይልካል
         await context.bot.send_message(
@@ -315,7 +319,10 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     # Reject recharge
     elif data.startswith("rej_rec_"):
         target_user_id = int(data.split("_")[2])
-        await query.edit_message_text(f"❌ ለ User `{target_user_id}` የገቢ ጥያቄ ተሰርዟል።", parse_mode="Markdown")
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
         await context.bot.send_message(
             chat_id=target_user_id, 
             text="❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን 100፣ 200 ወይም 500 ብር ብቻ በመምረጥ ትክክለኛ ስክሪንሻት ይላኩ።"
@@ -325,7 +332,10 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("app_wd_"):
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
-        await query.edit_message_text(f"✅ ለ User `{target_user_id}` የ {amount} ብር ወጪ ጥያቄ ተፈጽሟል።", parse_mode="Markdown")
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
         await context.bot.send_message(target_user_id, f"🎉 የ {amount} ብር ወጪ ጥያቄዎ ጸድቋል! ብሩ ወደ Telebirr አካውንትዎ ተልኳል።")
 
     # Withdraw rejection
@@ -333,7 +343,10 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
         new_bal = update_user_balance(target_user_id, amount)
-        await query.edit_message_text(f"❌ ለ User `{target_user_id}` የ {amount} ብር ወጪ ጥያቄ ተሰርዟል፤ ብሩ ተመልሷል።", parse_mode="Markdown")
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
         await context.bot.send_message(target_user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል። አዲሱ ባላንስዎ: {new_bal} ብር")
 
 # --- Game Selection & Matches ---
@@ -498,7 +511,10 @@ async def handle_admin_dispute(update: Update, context: ContextTypes.DEFAULT_TYP
         match_id = "_".join(parts[1:-1])
 
         if match_id not in active_matches:
-            await query.edit_message_text("❌ ይህ ጨዋታ ቀድሞ ተዘግቷል ወይም አልተገኘም።")
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
             return
 
         match = active_matches[match_id]
@@ -510,11 +526,11 @@ async def handle_admin_dispute(update: Update, context: ContextTypes.DEFAULT_TYP
         
         del active_matches[match_id]
 
-        await query.edit_message_text(
-            f"✅ አሸናፊው User `{winner_id}` ተለይቷል።\n"
-            f"💰 ለተሸናፊው (`{loser_id}`) ቀድሞ ተቀንሶ ነበር፣ አሁን ለአሸናፊው `{winner_id}` የ {prize} ብር ሽልማት በስኬት ተጨምሯል።",
-            parse_mode="Markdown"
-        )
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+
         await context.bot.send_message(
             winner_id, 
             f"🎉 Admin ውጤቱን አረጋግጧል! አሸናፊ በመሆንዎ የ {prize} ብር ሽልማት ባላንስዎ ላይ ተጨምሯል።\n💳 አዲሱ ባላንስዎ: {new_winner_bal} ብር"
