@@ -281,34 +281,45 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ የ {amount} ብር ማውጣት ጥያቄዎ ለ Admin ተልኳል። በቅርቡ ገቢ ይደረጋል!")
     return ConversationHandler.END
 
-# --- ADMIN CALLBACKS (እዚህ ጋር የጠፋው ኮድ ተመልሷል) ---
+# --- ADMIN CALLBACKS (የተስተካከለው እና የጠራው ክፍል) ---
 async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    user_id = update.effective_user.id
+    admin_user_id = update.effective_user.id
 
-    if user_id != ADMIN_ID:
+    if admin_user_id != ADMIN_ID:
         return
 
     # Recharge approval buttons (100, 200, 500)
     if data.startswith("app_rec_"):
-        _, _, target_user_id, amount = data.split("_")
-        target_user_id, amount = int(target_user_id), float(amount)
+        parts = data.split("_")
+        target_user_id = int(parts[2])
+        amount = float(parts[3])
         
         if amount not in [100.0, 200.0, 500.0]:
             await query.edit_message_text("❌ ስህተት! የተፈቀደው የገቢ መጠን 100፣ 200 ወይም 500 ብር ብቻ ነው።")
             return
 
+        # የገቢውን መጠን ተጠቃሚው ባላንስ ላይ በራሱ ይጨምረዋል
         new_bal = update_user_balance(target_user_id, amount)
+        
         await query.edit_message_text(f"✅ ለ User `{target_user_id}` በስኬት የ {amount} ብር ገቢ ተደርጓል።", parse_mode="Markdown")
-        await context.bot.send_message(target_user_id, f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፡ {new_bal} ብር")
+        
+        # ለተጠቃሚው በቀጥታ ገቢ መደረጉን የሚገልጽ መልእክት ይልካል
+        await context.bot.send_message(
+            chat_id=target_user_id, 
+            text=f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፦ {new_bal} ብር"
+        )
 
     # Reject recharge
     elif data.startswith("rej_rec_"):
         target_user_id = int(data.split("_")[2])
         await query.edit_message_text(f"❌ ለ User `{target_user_id}` የገቢ ጥያቄ ተሰርዟል።", parse_mode="Markdown")
-        await context.bot.send_message(target_user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን 100፣ 200 ወይም 500 ብር ብቻ በመምረጥ እንደገና ይሞክሩ።")
+        await context.bot.send_message(
+            chat_id=target_user_id, 
+            text="❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን 100፣ 200 ወይም 500 ብር ብቻ በመምረጥ ትክክለኛ ስክሪንሻት ይላኩ።"
+        )
 
     # Withdraw approval
     elif data.startswith("app_wd_"):
@@ -628,4 +639,3 @@ if __name__ == '__main__':
 
     print("Bot is running perfectly...")
     app.run_polling()
-
