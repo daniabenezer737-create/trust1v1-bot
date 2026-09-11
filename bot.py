@@ -74,12 +74,10 @@ MIN_PLAY_BALANCE = 100
 
 private_rooms = {}
 active_matches = {}
-admin_pending_recharge = {} 
 
 JOIN_ROOM_STATE = 1
 RECHARGE_NAME, RECHARGE_PHOTO = 2, 3
 WITHDRAW_AMOUNT, WITHDRAW_PHONE = 4, 5
-ADMIN_CUSTOM_RECHARGE = 6
 
 def generate_room_code():
     return ''.join(random.choices(string.digits, k=5))
@@ -178,7 +176,7 @@ async def handle_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_recharge_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"📥 **ብር ገቢ ማድረጊያ (Recharge)**\n\n"
-        f"• አነስተኛ ገቢ መጠን፦ **{MIN_DEPOSIT} ብር**\n\n"
+        f"• የሚፈቀዱ የገቢ መጠኖች፦ **100፣ 200 ወይም 500 ብር ብቻ** ናቸው።\n\n"
         f"📲 **Telebirr Details:**\n"
         f"• ስልክ፦ `{TELEBIRR_PHONE}`\n"
         f"• ስም፦ **{TELEBIRR_NAME}**\n\n"
@@ -202,6 +200,7 @@ async def handle_recharge_photo(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = update.effective_user.id
     sender_name = context.user_data.get('recharge_name', 'አልታወቀም')
 
+    # Strict options: 100, 200, 500 buttons only
     keyboard = [
         [
             InlineKeyboardButton("✅ 100 ብር አጽድቅ", callback_data=f"app_rec_{user_id}_100"),
@@ -209,9 +208,6 @@ async def handle_recharge_photo(update: Update, context: ContextTypes.DEFAULT_TY
         ],
         [
             InlineKeyboardButton("✅ 500 ብር አጽድቅ", callback_data=f"app_rec_{user_id}_500"),
-            InlineKeyboardButton("✍️ በሌላ መጠን አጽድቅ", callback_data=f"custom_rec_{user_id}")
-        ],
-        [
             InlineKeyboardButton("❌ Reject (ሰርዝ)", callback_data=f"rej_rec_{user_id}")
         ]
     ]
@@ -222,7 +218,7 @@ async def handle_recharge_photo(update: Update, context: ContextTypes.DEFAULT_TY
         caption=f"🔔 **አዲስ የ Recharge (የገቢ) ጥያቄ!**\n\n"
                 f"• User ID: `{user_id}`\n"
                 f"• የላከው ስም: **{sender_name}**\n\n"
-                f"እባክዎን ስክሪንሻቱን አረጋግጠው የሚፈለገውን የብር መጠን ይምረጡ፦",
+                f"እባክዎን ስክሪንሻቱን አረጋግጠው ከታች ካሉት አዝራሮች ተስማሚውን የብር መጠን ይምረጡ፦",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -286,7 +282,7 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ የ {amount} ብር ማውጣት ጥያቄዎ ለ Admin ተልኳል። በቅርቡ ገቢ ይደረጋል!")
     return ConversationHandler.END
 
-# --- Admin Callbacks & Custom Recharge ---
+# --- Admin Callbacks ---
 async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -296,53 +292,39 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     if user_id != ADMIN_ID:
         return
 
+    # Recharge approval buttons (100, 200, 500)
     if data.startswith("app_rec_"):
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
+        
+        if amount not in [100.0, 200.0, 500.0]:
+            await query.edit_message_text("❌ ስህተት! የተፈቀደው የገቢ መጠን 100፣ 200 ወይም 500 ብር ብቻ ነው።")
+            return
+
         new_bal = update_user_balance(target_user_id, amount)
-        await query.edit_message_text(f"✅ ለ User `{target_user_id}` {amount} ብር ገቢ ተደርጓል።", parse_mode="Markdown")
+        await query.edit_message_text(f"✅ ለ User `{target_user_id}` በስኬት የ {amount} ብር ገቢ ተደርጓል።", parse_mode="Markdown")
         await context.bot.send_message(target_user_id, f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፡ {new_bal} ብር")
 
-    elif data.startswith("custom_rec_"):
-        target_user_id = int(data.split("_")[2])
-        admin_pending_recharge[ADMIN_ID] = target_user_id
-        await query.message.reply_text(
-            f"✍️ ለ User `{target_user_id}` ማስገባት የሚፈልጉትን ትክክለኛ የብር መጠን (ቁጥር ብቻ) አሁን ይጻፉልኝ፦",
-            parse_mode="Markdown"
-        )
-
+    # Reject recharge
     elif data.startswith("rej_rec_"):
         target_user_id = int(data.split("_")[2])
         await query.edit_message_text(f"❌ ለ User `{target_user_id}` የገቢ ጥያቄ ተሰርዟል።", parse_mode="Markdown")
-        await context.bot.send_message(target_user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን የላኩትን ስም እና ስክሪንሻት አረጋግጠው እንደገና ይሞክሩ።")
+        await context.bot.send_message(target_user_id, "❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን 100፣ 200 ወይም 500 ብር ብቻ በመምረጥ እንደገና ይሞክሩ።")
 
+    # Withdraw approval
     elif data.startswith("app_wd_"):
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
         await query.edit_message_text(f"✅ ለ User `{target_user_id}` የ {amount} ብር ወጪ ጥያቄ ተፈጽሟል።", parse_mode="Markdown")
         await context.bot.send_message(target_user_id, f"🎉 የ {amount} ብር ወጪ ጥያቄዎ ጸድቋል! ብሩ ወደ Telebirr አካውንትዎ ተልኳል።")
 
+    # Withdraw rejection
     elif data.startswith("rej_wd_"):
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
         new_bal = update_user_balance(target_user_id, amount)
         await query.edit_message_text(f"❌ ለ User `{target_user_id}` የ {amount} ብር ወጪ ጥያቄ ተሰርዟል፤ ብሩ ተመልሷል።", parse_mode="Markdown")
         await context.bot.send_message(target_user_id, f"❌ የብር ማውጣት ጥያቄዎ አልፀደቀም። የተቀነሰው {amount} ብር ወደ ባላንስዎ ተመልሷል። አዲሱ ባላንስዎ: {new_bal} ብር")
-
-async def handle_admin_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        return
-
-    if user_id in admin_pending_recharge:
-        target_user_id = admin_pending_recharge.pop(user_id)
-        try:
-            amount = float(update.message.text.strip())
-            new_bal = update_user_balance(target_user_id, amount)
-            await update.message.reply_text(f"✅ ለ User `{target_user_id}` በስኬት የ {amount} ብር ገቢ ተደረገ! አዲሱ ባላንስ፦ {new_bal} ብር", parse_mode="Markdown")
-            await context.bot.send_message(target_user_id, f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፡ {new_bal} ብር")
-        except ValueError:
-            await update.message.reply_text("❌ እባክዎን ትክክለኛ የቁጥር መጠን ብቻ ያስገቡ።")
 
 # --- Game Selection & Matches ---
 async def handle_game_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -494,7 +476,7 @@ async def handle_screenshot_photo(update: Update, context: ContextTypes.DEFAULT_
     else:
         await update.message.reply_text("❌ በአሁኑ ሰዓት አለመግባባት ውስጥ ያለ ጨዋታ አልተገኘም።")
 
-# --- ADMIN DISPUTE RESOLUTION (የአድሚን አሸናፊ መራጭ በተኖች) ---
+# --- ADMIN DISPUTE RESOLUTION ---
 async def handle_admin_dispute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -542,12 +524,16 @@ async def handle_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYP
              InlineKeyboardButton("200 ብር", callback_data="create_200"),
              InlineKeyboardButton("500 ብር", callback_data="create_500")]
         ]
-        await query.edit_message_text("የሩም የውርርድ መጠን ይምረጡ፡", reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("የሩም የውርርድ መጠን ይምረጡ (100, 200, ወይም 500 ብር ብቻ)፡", reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif query.data.startswith("create_"):
         amount = int(query.data.split("_")[1])
         user_id = query.from_user.id
         bal = get_user_balance(user_id)
+
+        if amount not in [100, 200, 500]:
+            await query.edit_message_text("❌ የተሳሳተ የውርርድ መጠን። 100፣ 200 ወይም 500 ብር ብቻ መምረጥ ይቻላል።")
+            return
 
         if bal < amount:
             await query.edit_message_text(f"❌ በቂ ባላንስ የለዎትም! (የእርስዎ ባላንስ: {bal} ብር)")
@@ -634,36 +620,13 @@ if __name__ == '__main__':
     app.add_handler(withdraw_conv)
     app.add_handler(join_room_conv)
 
-    app.add_handler(MessageHandler(filters.TEXT & filters.User(ADMIN_ID) & ~filters.COMMAND, handle_admin_text_input))
     app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot_photo))
 
     app.add_handler(CallbackQueryHandler(handle_claim_callback, pattern="^claim_"))
     app.add_handler(CallbackQueryHandler(handle_admin_dispute, pattern="^dwin_"))
-    app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_|custom_)"))
+    app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^(app_|rej_)"))
     app.add_handler(CallbackQueryHandler(handle_mode_callback))
 
     print("Bot is running perfectly...")
     app.run_polling()
 
-from flask import Flask
-from threading import Thread
-import os
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is alive!"
-
-def run():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# ይህንን ከታች በኮድህ መጀመሪያ ላይ ጥራው
-if name == "main":
-    keep_alive()
-    # የቦትህ ማስጀመሪያ ኮድ እዚህ ጋር ይቀጥላል
