@@ -200,7 +200,6 @@ async def handle_recharge_photo(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = update.effective_user.id
     sender_name = context.user_data.get('recharge_name', 'አልታወቀም')
 
-    # Strict options: 100, 200, 500 buttons only
     keyboard = [
         [
             InlineKeyboardButton("✅ 100 ብር አጽድቅ", callback_data=f"app_rec_{user_id}_100"),
@@ -282,7 +281,7 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ የ {amount} ብር ማውጣት ጥያቄዎ ለ Admin ተልኳል። በቅርቡ ገቢ ይደረጋል!")
     return ConversationHandler.END
 
-# --- Admin Callbacks ---
+# --- ADMIN CALLBACKS (እዚህ ጋር የጠፋው ኮድ ተመልሷል) ---
 async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
