@@ -110,7 +110,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     reply_keyboard = [
-        ['⚽ eFootball', '🎮 DLS'],
+        ['🔥 Free Fire', '🎯 PUBG'],
         ['💳 Recharge', '🏧 Withdraw'],
         ['💰 Balance']
     ]
@@ -118,7 +118,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     welcome_text = (
         f"ሰላም {first_name}! 👋\n"
-        f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
+        f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮🔥\n\n"
         f"እዚህ ጋር ከጓደኛዎ ጋር ሩም ፈጥረው በመወዳደር የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
         f"💳 **የአሁኑ ባላንስዎ፦** `{bal} ብር`\n\n"
         f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
@@ -142,7 +142,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         bal = get_user_balance(user_id)
 
         reply_keyboard = [
-            ['⚽ eFootball', '🎮 DLS'],
+            ['🔥 Free Fire', '🎯 PUBG'],
             ['💳 Recharge', '🏧 Withdraw'],
             ['💰 Balance']
         ]
@@ -150,7 +150,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         welcome_text = (
             f"ሰላም {first_name}! 👋\n"
-            f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮⚽\n\n"
+            f"እንኳን ወደ **1v1 Gaming Betting Bot** በደህና መጡ! 🎮🔥\n\n"
             f"እዚህ ጋር ከጓደኛዎ ጋር ሩም ፈጥረው በመወዳደር የገንዘብ ሽልማቶችን ማግኘት ይችላሉ።\n\n"
             f"💳 **የአሁኑ ባላንስዎ፦** `{bal} ብር`\n\n"
             f"👇 ለመጀመር ከታች ካሉት አማራጮች የሚፈልጉትን ይምረጡ፦"
@@ -281,7 +281,7 @@ async def handle_withdraw_phone(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ የ {amount} ብር ማውጣት ጥያቄዎ ለ Admin ተልኳል። በቅርቡ ገቢ ይደረጋል!")
     return ConversationHandler.END
 
-# --- ADMIN CALLBACKS (የተስተካከለው እና ቻቱ የሚጠፋበት ክፍል) ---
+# --- ADMIN CALLBACKS ---
 async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -291,7 +291,6 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
     if admin_user_id != ADMIN_ID:
         return
 
-    # Recharge approval buttons (100, 200, 500)
     if data.startswith("app_rec_"):
         parts = data.split("_")
         target_user_id = int(parts[2])
@@ -301,22 +300,18 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
             await query.edit_message_text("❌ ስህተት! የተፈቀደው የገቢ መጠን 100፣ 200 ወይም 500 ብር ብቻ ነው።")
             return
 
-        # የገቢውን መጠን ተጠቃሚው ባላንስ ላይ በራሱ ይጨምረዋል
         new_bal = update_user_balance(target_user_id, amount)
         
-        # የአድሚኑን ቻት (ፎቶ እና ቁልፎቹን) ሙሉ በሙሉ ማጥፋት
         try:
             await query.message.delete()
         except Exception:
             pass
         
-        # ለተጠቃሚው በቀጥታ ገቢ መደረጉን የሚገልጽ መልእክት ይልካል
         await context.bot.send_message(
             chat_id=target_user_id, 
             text=f"🎉 የ {amount} ብር ገቢ ጥያቄዎ ጸድቋል! አዲሱ ባላንስዎ፦ {new_bal} ብር"
         )
 
-    # Reject recharge
     elif data.startswith("rej_rec_"):
         target_user_id = int(data.split("_")[2])
         try:
@@ -328,7 +323,6 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
             text="❌ የገቢ ጥያቄዎ አልፀደቀም። እባክዎን 100፣ 200 ወይም 500 ብር ብቻ በመምረጥ ትክክለኛ ስክሪንሻት ይላኩ።"
         )
 
-    # Withdraw approval
     elif data.startswith("app_wd_"):
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
@@ -338,7 +332,6 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
             pass
         await context.bot.send_message(target_user_id, f"🎉 የ {amount} ብር ወጪ ጥያቄዎ ጸድቋል! ብሩ ወደ Telebirr አካውንትዎ ተልኳል።")
 
-    # Withdraw rejection
     elif data.startswith("rej_wd_"):
         _, _, target_user_id, amount = data.split("_")
         target_user_id, amount = int(target_user_id), float(amount)
@@ -640,7 +633,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(check_join_callback, pattern="^check_join$"))
     app.add_handler(MessageHandler(filters.Regex("^💰 Balance$"), handle_balance))
-    app.add_handler(MessageHandler(filters.Regex("^(⚽ eFootball|🎮 DLS)$"), handle_game_selection))
+    app.add_handler(MessageHandler(filters.Regex("^(🔥 Free Fire|🎯 PUBG)$"), handle_game_selection))
 
     app.add_handler(recharge_conv)
     app.add_handler(withdraw_conv)
