@@ -62,9 +62,9 @@ def run_health_check_server():
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
     server.serve_forever()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8640582909:AAHNm46gYHrqdeBhe_I9ccfNe8Vax6I8sNM")
-ADMIN_ID = 5283089413
-GROUP_USERNAME = "@trust1v1"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8839009531:AAHL9V-tJeNkLhu36jeDLeK4Pzwh93LphZs")
+ADMIN_ID = 8628131807
+GROUP_USERNAME = "@PUBG1V1FF"
 TELEBIRR_PHONE = "0940472271"
 TELEBIRR_NAME = "Abenezer"
 
@@ -98,7 +98,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_member = await is_user_member(context, user_id)
     if not is_member:
         keyboard = [
-            [InlineKeyboardButton("📢 ግሩፑን ይቀላቀሉ (Join Group)", url=f"https://t.me/trust1v1")],
+            [InlineKeyboardButton("📢 ግሩፑን ይቀላቀሉ (Join Group)", url=f"https://t.me/PUBG1V1FF".replace('@', ''))],
             [InlineKeyboardButton("✅ አረጋግጥ (Verify)", callback_data="check_join")]
         ]
         await update.message.reply_text(
@@ -648,3 +648,5 @@ if __name__ == '__main__':
 
     print("Bot is running perfectly...")
     app.run_polling()
+
+
